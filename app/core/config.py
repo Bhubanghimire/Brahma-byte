@@ -2,11 +2,11 @@ from pydantic_settings import BaseSettings,SettingsConfigDict
 
 class Settings(BaseSettings):
 
-    APP_NAME: str = "Notification Service"
+    APP_NAME: str
 
     DATABASE_URL: str
 
-    DEBUG: bool = True
+    DEBUG: bool
 
     HOST: str = "0.0.0.0"
     PORT: int = 8000
@@ -18,4 +18,3 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-settings = Settings()

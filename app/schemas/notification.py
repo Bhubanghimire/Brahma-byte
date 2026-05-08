@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from datetime import datetime
 
 class NotificationCreate(BaseModel):
-    user_id: str
+    user_id: int
     message: str
 
 class NotificationResponse(BaseModel):
@@ -11,5 +11,6 @@ class NotificationResponse(BaseModel):
     message: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True
+    }

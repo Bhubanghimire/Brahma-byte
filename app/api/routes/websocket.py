@@ -7,7 +7,7 @@ router = APIRouter()
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
-    user_id: str
+    user_id: int
 ):
     await manager.connect(user_id, websocket)
 

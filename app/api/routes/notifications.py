@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.response import success
+from app.schemas.base import ApiResponse
 from app.schemas.notification import (
     NotificationCreate,
     NotificationResponse
@@ -13,7 +14,7 @@ from app.core.websocket_manager import manager
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
-@router.post("", response_model=NotificationResponse)
+@router.post("", response_model=ApiResponse)
 async def create_notification(
     payload: NotificationCreate,
     db: AsyncSession = Depends(get_db)
@@ -32,17 +33,18 @@ async def create_notification(
         }
     )
 
-    return notification
+    return success(
+        data=notification,
+        message="Data created successfully"
+    )
 
-@router.get("/{user_id}", response_model=list[NotificationResponse])
+
+@router.get("/{user_id}")
 async def get_notifications(
     user_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    notifications = await NotificationService.get_user_notifications(
-        db,
-        user_id
-    )
+    notifications = await NotificationService.get_user_notifications(db, user_id)
 
     return success(
         data=notifications,
