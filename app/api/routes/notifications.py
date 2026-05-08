@@ -10,7 +10,6 @@ from app.schemas.notification import (
 
 from app.api.dependencies import get_db
 from app.services.notification_service import NotificationService
-from app.core.websocket_manager import manager
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
@@ -23,14 +22,6 @@ async def create_notification(
         db=db,
         user_id=payload.user_id,
         message=payload.message
-    )
-
-    await manager.send_personal_message(
-        payload.user_id,
-        {
-            "message": payload.message,
-            "created_at": str(notification.created_at)
-        }
     )
 
     return success(

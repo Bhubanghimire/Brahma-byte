@@ -1,92 +1,120 @@
 # Real-Time Notification Service
 
 ## Overview
-This project is a real-time notification backend built with FastAPI, WebSockets, SQLAlchemy, SQLite, and Docker.
+A FastAPI-based real-time notification backend that combines REST APIs, Redis Pub/Sub, and WebSockets.
 
-It supports:
-- creating notifications via REST API,
-- persisting notifications in a database,
-- delivering notifications instantly to connected users over WebSockets,
-- fetching user notifications with pagination.
-
-The project is designed as a clean layered backend suitable for assessment/interview review.
+Core flow:
+- Create notifications via REST.
+- Persist notifications in DB.
+- Publish notification events to Redis.
+- Consume events in a subscriber worker.
+- Push per-user messages over active WebSocket connections.
 
 ## Tech Stack
 - FastAPI
 - WebSockets
-- SQLAlchemy (Async)
-- SQLite (default, configurable via `DATABASE_URL`)
+- Redis Pub/Sub (`redis.asyncio`)
+- SQLAlchemy Async
+- SQLite
 - Pydantic v2
 - Docker / Docker Compose
 
 ## Architecture
-The codebase follows a layered structure:
+This service follows an event-driven architecture:
 
+`Client → API → Service → Redis Pub/Sub → Worker → WebSocket Manager → Client`
+
+### Architecture Diagram
+```text
+Client
+  ↓
+FastAPI API Layer
+  ↓
+Service Layer
+  ↓
+Redis Pub/Sub (event bus)
+  ↓
+Redis Subscriber Worker
+  ↓
+WebSocket Manager
+  ↓
+Client
+```
+
+### Layer Responsibilities
 - API layer (`app/api/routes`)
-- Handles HTTP and WebSocket endpoints.
-- Accepts input, delegates work to services, returns response contracts.
+- Receives HTTP/WebSocket requests and returns response contracts.
 
 - Service layer (`app/services`)
-- Contains business logic for notification creation and retrieval.
-- Keeps route handlers thin and maintainable.
+- Executes business logic, writes DB records, and publishes notification events.
 
 - DB layer (`app/db`)
-- Defines SQLAlchemy model(s) and async engine/session setup.
+- SQLAlchemy models, async engine, and session management.
 
 - Schema layer (`app/schemas`)
-- Defines request validation and response contracts.
-- Uses typed wrappers (including generic `ApiResponse[T]`) for consistency.
+- Pydantic request/response models and typed `ApiResponse[T]` wrapper.
+
+- Redis + worker (`app/core/redis.py`, `app/workers/redis_subscriber.py`)
+- Provides event bus and subscriber loop for delivery.
 
 - WebSocket layer (`app/core/websocket_manager.py`)
-- Manages active in-memory user connections.
-- Sends per-user real-time messages and removes stale connections.
+- In-memory per-user connection registry and message push.
 
-### Architecture Flow
-`Client → FastAPI Router → Service → DB + WebSocket Manager`
+## System Design Explanation
+- Redis Pub/Sub is used to decouple event creation from WebSocket delivery.
+- API/service path creates and publishes events; delivery happens asynchronously in the subscriber worker.
+- WebSocket manager remains in-memory because socket lifecycle is process-local and fast for single-instance scope.
+- API no longer directly pushes to WebSockets, reducing coupling and improving extensibility.
+
+Redis Pub/Sub model in this project:
+- Publisher sends to `notifications:{user_id}`.
+- Subscriber listens to `notifications:*` and forwards payload to active sockets.
+- Communication is decoupled and fire-and-forget (at-most-once delivery).
+
+## Scalability Design
+- Current design uses in-memory WebSocket connections per app instance.
+- Redis enables multiple API instances to publish events to a shared event bus.
+- WebSocket-serving instances can scale horizontally, each consuming events and delivering to local connections.
+- Limitation: Redis Pub/Sub is non-persistent, so missed messages are not replayed.
+
+## Key Design Decisions
+- Event-driven delivery over direct socket push:
+- Separates request handling, event creation, and event delivery.
+
+- Clear separation of concerns:
+- API handles request/response, service creates domain events, worker delivers events.
+
+- `user_id` as `str`:
+- Consistent across API routes, Redis channels, and WebSocket connection keys.
+
+- Generic `ApiResponse[T]` wrapper:
+- Ensures predictable, strongly-typed response contracts.
+
+- Pagination metadata (`items`, `total`, `page`, `size`, `pages`):
+- Supports practical frontend paging and API usability.
+
+## Trade-offs
+- Redis Pub/Sub is low-latency and simple, but not durable.
+- In-memory WebSocket manager is fast, but limits full cross-instance connection coordination.
+- SQLite keeps setup simple for assessment scope, but is not ideal as a production primary DB.
+- No retry/dead-letter flow exists yet for failed or missed delivery events.
 
 ## Features Implemented
 - Real-time per-user WebSocket notifications
 - REST API for creating notifications
-- Paginated notification retrieval (`items`, `total`, `page`, `size`, `pages`)
-- Consistent API response contracts (`message`, `data`)
-- Async database handling with SQLAlchemy
-- Dockerized local setup
-
-## Key Design Decisions
-- `user_id` as `str`
-- Keeps WebSocket path/user-key handling straightforward and consistent across route/manager layers.
-
-- In-memory WebSocket manager
-- Chosen to satisfy single-instance assignment scope without adding Redis or broker complexity.
-
-- Service layer abstraction
-- Separates business logic from transport concerns (HTTP/WebSocket), improving testability and readability.
-
-- Generic `ApiResponse[T]` wrapper
-- Enforces predictable typed responses for frontend integration and API contract clarity.
-
-- Pagination with metadata
-- Returning `total`, `page`, `size`, and `pages` supports practical client-side navigation and UX.
+- Paginated notification retrieval
+- Consistent typed API response contracts
+- Async SQLAlchemy DB access
+- Redis Pub/Sub event publishing and subscriber delivery worker
+- Dockerized local environment (API + Redis)
 
 ## API Summary
-### Create Notification
 - `POST /notifications`
-- Body:
-```json
-{
-  "user_id": "1",
-  "message": "Hello"
-}
-```
-
-### Get Notifications (Paginated)
 - `GET /notifications/{user_id}?page=1&size=10`
-
-### WebSocket Connect
 - `ws://localhost:8000/ws/{user_id}`
 
-## Local Run
-### 1. Environment
+## Run
+### Environment
 Create `.env`:
 
 ```env
@@ -95,22 +123,34 @@ DATABASE_URL=sqlite+aiosqlite:///./notifications.db
 DEBUG=True
 HOST=0.0.0.0
 PORT=8000
+REDIS_URL=redis://redis:6379/0
 ```
 
-### 2. Docker
+For local non-Docker run, use:
+- `REDIS_URL=redis://localhost:6379/0`
+
+### Docker (recommended)
 ```bash
 docker-compose up --build
 ```
 
-App will be available at `http://localhost:8000`.
+### Local
+1. Start Redis
+```bash
+redis-server
+```
+2. Start API
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
 ## Future Improvements
+- Redis Streams for durable event messaging
 - JWT authentication/authorization for WebSocket connections
-- Redis-based distributed WebSocket scaling for multi-instance deployments
-- Alembic migrations for database versioning and controlled schema evolution
-- Message retry mechanism and queue-backed delivery guarantees
+- Distributed WebSocket routing across instances
+- Message retry mechanism and dead-letter queue
+- PostgreSQL migration from SQLite
 - WebSocket rate limiting / abuse protection
 
-## Notes
-- Current WebSocket connection state is in-memory and resets on service restart.
-- The current setup is suitable for single-instance deployments and assessment scope.
+## Scope Note
+This implementation is intentionally lean for assessment scope while demonstrating event-driven backend design and clear service boundaries.

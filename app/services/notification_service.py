@@ -2,7 +2,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 import logging
+import json
 
+from app.core.redis import get_redis_client
 from app.db.models import Notification
 from app.schemas.notification import NotificationResponse
 
@@ -34,6 +36,17 @@ class NotificationService:
                 str(exc)
             )
             raise
+
+        payload = {
+            "user_id": user_id,
+            "message": message,
+            "notification_id": notification.id,
+            "timestamp": notification.created_at.isoformat() if notification.created_at else None
+        }
+        await get_redis_client().publish(
+            f"notifications:{user_id}",
+            json.dumps(payload)
+        )
 
         return NotificationResponse.model_validate(notification)
 
