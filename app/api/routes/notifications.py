@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.response import success
-from app.schemas.base import ApiResponse
 from app.schemas.notification import (
+    NotificationCreateApiResponse,
+    NotificationListApiResponse,
     NotificationCreate,
-    NotificationResponse
 )
 
 from app.api.dependencies import get_db
@@ -14,7 +14,7 @@ from app.core.websocket_manager import manager
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
-@router.post("", response_model=ApiResponse)
+@router.post("", response_model=NotificationCreateApiResponse)
 async def create_notification(
     payload: NotificationCreate,
     db: AsyncSession = Depends(get_db)
@@ -39,7 +39,7 @@ async def create_notification(
     )
 
 
-@router.get("/{user_id}")
+@router.get("/{user_id}", response_model=NotificationListApiResponse)
 async def get_notifications(
     user_id: str,
     page: int = Query(1, ge=1),

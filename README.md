@@ -1,183 +1,116 @@
-# Real-Time Notification Service (FastAPI + WebSockets)
+# Real-Time Notification Service
 
 ## Overview
+This project is a real-time notification backend built with FastAPI, WebSockets, SQLAlchemy, SQLite, and Docker.
 
-This is a lightweight real-time notification system built using FastAPI,
-WebSockets, and SQLite.\
-It supports creating notifications via REST API and delivering them
-instantly to connected WebSocket clients.
+It supports:
+- creating notifications via REST API,
+- persisting notifications in a database,
+- delivering notifications instantly to connected users over WebSockets,
+- fetching user notifications with pagination.
 
-------------------------------------------------------------------------
-
-## Features
-
--   WebSocket connection per user
--   Real-time notification delivery
--   Persistent storage using SQLite (default) with support for
-    PostgreSQL via configuration
--   REST APIs for creating and fetching notifications
--   Standard API response format (`data`, `message`)
--   Dockerized setup
-
-------------------------------------------------------------------------
+The project is designed as a clean layered backend suitable for assessment/interview review.
 
 ## Tech Stack
+- FastAPI
+- WebSockets
+- SQLAlchemy (Async)
+- SQLite (default, configurable via `DATABASE_URL`)
+- Pydantic v2
+- Docker / Docker Compose
 
--   FastAPI
--   SQLAlchemy (async)
--   WebSockets
--   SQLite / PostgreSQL (configurable)
--   Docker / Docker Compose
--   Pydantic v2
+## Architecture
+The codebase follows a layered structure:
 
-------------------------------------------------------------------------
-## Project Structure
-```text
-.
-├── Dockerfile
-├── docker-compose.yml
-├── README.md
-├── requirements.txt
-├── notifications.db
-│
-├── app/
-│   ├── main.py
-│   │
-│   ├── api/
-│   │   ├── dependencies.py
-│   │   └── routes/
-│   │       ├── notifications.py
-│   │       └── websocket.py
-│   │
-│   ├── core/
-│   │   ├── config.py
-│   │   ├── response.py
-│   │   └── websocket_manager.py
-│   │
-│   ├── db/
-│   │   ├── database.py
-│   │   └── models.py
-│   │
-│   ├── schemas/
-│   │   ├── base.py
-│   │   └── notification.py
-│   │
-│   ├── services/
-│   │   └── notification_service.py
-│
-└── tests/
-------------------------------------------------------------------------
+- API layer (`app/api/routes`)
+- Handles HTTP and WebSocket endpoints.
+- Accepts input, delegates work to services, returns response contracts.
 
-## Setup Instructions
+- Service layer (`app/services`)
+- Contains business logic for notification creation and retrieval.
+- Keeps route handlers thin and maintainable.
 
-### 1. Clone the repository
+- DB layer (`app/db`)
+- Defines SQLAlchemy model(s) and async engine/session setup.
 
-git clone `<repo-url>` cd `<project-folder>`
+- Schema layer (`app/schemas`)
+- Defines request validation and response contracts.
+- Uses typed wrappers (including generic `ApiResponse[T]`) for consistency.
 
-### 2. Create `.env`
-copy the content of .env.example<br>
+- WebSocket layer (`app/core/websocket_manager.py`)
+- Manages active in-memory user connections.
+- Sends per-user real-time messages and removes stale connections.
 
-### With:
+### Architecture Flow
+`Client → FastAPI Router → Service → DB + WebSocket Manager`
 
-```env id="env1"
+## Features Implemented
+- Real-time per-user WebSocket notifications
+- REST API for creating notifications
+- Paginated notification retrieval (`items`, `total`, `page`, `size`, `pages`)
+- Consistent API response contracts (`message`, `data`)
+- Async database handling with SQLAlchemy
+- Dockerized local setup
+
+## Key Design Decisions
+- `user_id` as `str`
+- Keeps WebSocket path/user-key handling straightforward and consistent across route/manager layers.
+
+- In-memory WebSocket manager
+- Chosen to satisfy single-instance assignment scope without adding Redis or broker complexity.
+
+- Service layer abstraction
+- Separates business logic from transport concerns (HTTP/WebSocket), improving testability and readability.
+
+- Generic `ApiResponse[T]` wrapper
+- Enforces predictable typed responses for frontend integration and API contract clarity.
+
+- Pagination with metadata
+- Returning `total`, `page`, `size`, and `pages` supports practical client-side navigation and UX.
+
+## API Summary
+### Create Notification
+- `POST /notifications`
+- Body:
+```json
+{
+  "user_id": "1",
+  "message": "Hello"
+}
+```
+
+### Get Notifications (Paginated)
+- `GET /notifications/{user_id}?page=1&size=10`
+
+### WebSocket Connect
+- `ws://localhost:8000/ws/{user_id}`
+
+## Local Run
+### 1. Environment
+Create `.env`:
+
+```env
 APP_NAME=Real-Time Notification Service
 DATABASE_URL=sqlite+aiosqlite:///./notifications.db
 DEBUG=True
 HOST=0.0.0.0
 PORT=8000
+```
 
-### 3. Run with Docker
-
+### 2. Docker
+```bash
 docker-compose up --build
+```
 
-------------------------------------------------------------------------
+App will be available at `http://localhost:8000`.
 
-## API Endpoints
+## Future Improvements
+- JWT authentication/authorization for WebSocket connections
+- Redis-based distributed WebSocket scaling for multi-instance deployments
+- Alembic migrations for database versioning and controlled schema evolution
+- Message retry mechanism and queue-backed delivery guarantees
+- WebSocket rate limiting / abuse protection
 
-### Create Notification
-
-POST /notifications
-
-Request: { "user_id": 1, "message": "Hello User" }
-
-Response: { "data": { "id": 1, "user_id": 1, "message": "Hello User",
-"created_at": "2026-05-08T12:00:00" }, "message": "Data created
-successfully" }
-
-------------------------------------------------------------------------
-
-### Get Notifications
-
-GET /notifications/{user_id}
-
-Response: { "data": \[\], "message": "Notifications fetched
-successfully" }
-
-------------------------------------------------------------------------
-
-## WebSocket
-
-### Connection
-
-ws://localhost:8000/ws/{user_id}
-
-Example: ws://localhost:8000/ws/1
-
-### Behavior
-
--   Each user maintains a persistent WebSocket connection
--   Notifications are pushed in real-time if the user is connected
--   If user is offline, notifications are stored in database
-
-------------------------------------------------------------------------
-
-## Design Decisions
-
-### 1. Service Layer Architecture
-
-Business logic is separated from API routes for maintainability.
-
-### 2. WebSocket Connection Manager
-
-Maintains active user connections using an in-memory dictionary.
-
-### 3. Standard API Response
-
-All responses follow: { "data": {}, "message": "" }
-
-### 4. Async Database
-
-SQLAlchemy async engine ensures non-blocking operations.
-
-------------------------------------------------------------------------
-
-## Important Notes
-
--   WebSocket connections are stored in-memory
--   Connections reset when server restarts
--   For production scaling, Redis or a message broker should be used
--   Currently suitable for single-instance deployment
-
-------------------------------------------------------------------------
-
-## How to Test
-
-### WebSocket Client
-
-const ws = new WebSocket("ws://localhost:8000/ws/1");
-
-ws.onmessage = (event) =\> { console.log(event.data); };
-<br>
-You can connect from postman
-
-### Send Notification
-
-curl -X POST http://localhost:8000/notifications -H "Content-Type:
-application/json" -d '{"user_id":1,"message":"Hello"}'
-
-------------------------------------------------------------------------
-
-## Author
-
-Bhuban Ghimire<br>
-Backend Developer Assignment Submission
+## Notes
+- Current WebSocket connection state is in-memory and resets on service restart.
+- The current setup is suitable for single-instance deployments and assessment scope.

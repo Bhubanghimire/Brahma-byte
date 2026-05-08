@@ -55,7 +55,7 @@ class NotificationService:
         notifications = result.scalars().all()
 
         return {
-            "data": [
+            "items": [
                 NotificationResponse.model_validate(n)
                 for n in notifications
             ],
