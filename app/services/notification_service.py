@@ -1,15 +1,19 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import SQLAlchemyError
+import logging
 
 from app.db.models import Notification
 from app.schemas.notification import NotificationResponse
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationService:
 
     @staticmethod
     async def create_notification(
-        db,
+        db: AsyncSession,
         user_id: str,
         message: str
     ):
@@ -18,16 +22,24 @@ class NotificationService:
             message=message
         )
 
-        db.add(notification)
-
-        await db.commit()
-        await db.refresh(notification)
+        try:
+            db.add(notification)
+            await db.commit()
+            await db.refresh(notification)
+        except SQLAlchemyError as exc:
+            await db.rollback()
+            logger.exception(
+                "Failed to create notification: user_id=%s error=%s",
+                user_id,
+                str(exc)
+            )
+            raise
 
         return NotificationResponse.model_validate(notification)
 
     @staticmethod
     async def get_user_notifications(
-            db,
+            db: AsyncSession,
             user_id: str,
             page: int = 1,
             size: int = 10
