@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.response import success
@@ -42,10 +42,11 @@ async def create_notification(
 @router.get("/{user_id}")
 async def get_notifications(
     user_id: str,
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db)
 ):
-    notifications = await NotificationService.get_user_notifications(db, user_id)
-
+    notifications = await NotificationService.get_user_notifications(db, user_id, page, size)
     return success(
         data=notifications,
         message="Notifications fetched successfully"

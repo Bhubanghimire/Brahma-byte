@@ -31,24 +31,60 @@ instantly to connected WebSocket clients.
 -   Pydantic v2
 
 ------------------------------------------------------------------------
-
 ## Project Structure
-
-app/ ├── api/ ├── core/ ├── db/ ├── schemas/ ├── services/ ├── main.py
-
+```text
+.
+├── Dockerfile
+├── docker-compose.yml
+├── README.md
+├── requirements.txt
+├── notifications.db
+│
+├── app/
+│   ├── main.py
+│   │
+│   ├── api/
+│   │   ├── dependencies.py
+│   │   └── routes/
+│   │       ├── notifications.py
+│   │       └── websocket.py
+│   │
+│   ├── core/
+│   │   ├── config.py
+│   │   ├── response.py
+│   │   └── websocket_manager.py
+│   │
+│   ├── db/
+│   │   ├── database.py
+│   │   └── models.py
+│   │
+│   ├── schemas/
+│   │   ├── base.py
+│   │   └── notification.py
+│   │
+│   ├── services/
+│   │   └── notification_service.py
+│
+└── tests/
 ------------------------------------------------------------------------
 
 ## Setup Instructions
 
 ### 1. Clone the repository
 
-git clone `<repo-url>`{=html} cd `<project-folder>`{=html}
+git clone `<repo-url>` cd `<project-folder>`
 
 ### 2. Create `.env`
+copy the content of .env.example<br>
 
+### With:
+
+```env id="env1"
 APP_NAME=Real-Time Notification Service
-DATABASE_URL=sqlite+aiosqlite:///./notifications.db DEBUG=True
-HOST=0.0.0.0 PORT=8000
+DATABASE_URL=sqlite+aiosqlite:///./notifications.db
+DEBUG=True
+HOST=0.0.0.0
+PORT=8000
 
 ### 3. Run with Docker
 
@@ -131,6 +167,8 @@ SQLAlchemy async engine ensures non-blocking operations.
 const ws = new WebSocket("ws://localhost:8000/ws/1");
 
 ws.onmessage = (event) =\> { console.log(event.data); };
+<br>
+You can connect from postman
 
 ### Send Notification
 
@@ -141,4 +179,5 @@ application/json" -d '{"user_id":1,"message":"Hello"}'
 
 ## Author
 
-Bhuban Ghimire Backend Developer Assignment Submission
+Bhuban Ghimire<br>
+Backend Developer Assignment Submission
